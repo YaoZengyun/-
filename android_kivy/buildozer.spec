@@ -18,10 +18,10 @@ android.minapi = 21
 # 权限可按需添加
 android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,READ_MEDIA_IMAGES
 
-# Use mirror for python-for-android to avoid GitHub connectivity issues
-p4a.url = https://gitclone.com/github.com/kivy/python-for-android.git
-p4a.branch = develop
-p4a.local_recipes = local_recipes
+# Use official defaults for python-for-android (online build on GitHub Actions)
+# p4a.url = https://gitclone.com/github.com/kivy/python-for-android.git
+# p4a.branch = develop
+# p4a.local_recipes = local_recipes
 
 [buildozer]
 log_level = 2
