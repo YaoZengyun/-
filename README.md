@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 安安的素描本聊天框
 
 本项目是一个将你在一个文本输入框中的文字或图片写到安安的素描本上的项目
@@ -34,7 +35,6 @@
 
 ## 其他分支
 
-- [支援MacOS的分支](https://github.com/Sheyiyuan/Anan-s-Sketchbook-Chat-Box/)
 
 ## 移动端方案（推荐）：后端 API + 移动前端
 
@@ -54,8 +54,6 @@
 
 ### 接口说明
 
-- GET `/bases`：返回默认底图与映射表。
-- POST `/generate`：根据文本或图片生成新图，返回 base64 PNG。
 
 请求（JSON）：
 ```json
@@ -68,9 +66,6 @@
 ```
 
 说明：
-- `text` 与 `image_base64` 至少提供一个。两者同时提供时优先使用 `image_base64`（图片贴入）。
-- 如果不提供 `base_key`，且 `text` 中包含 `BASEIMAGE_MAPPING` 的关键词（如 `#开心#`），会自动切换底图并移除关键词。
-- 返回字段 `image_base64` 为 `data:image/png;base64,......` 可直接用于 `<Image>` 或 RN 的 `Image` 组件。
 
 ### 移动端前端（建议）
 
@@ -89,3 +84,6 @@ async function generateFromText(text) {
 ```
 
 如需我在本仓库下新增最小的 Expo 示例工程（`mobile/` 目录），请告诉我你的偏好（Expo/Flutter/uni-app 等）与目标平台（Android/iOS）。
+=======
+# -
+>>>>>>> origin/main
