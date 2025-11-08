@@ -33,6 +33,9 @@ jobs:
             export PATH=$HOME/.local/bin:$PATH
             # allow buildozer running as root inside container (non-interactive)
             export BUILDOZER_ALLOW_ROOT=1
+            # map repo path to the absolute path used in local_recipes file:// URLs
+            mkdir -p /home/qmqaq
+            ln -sfn /home/user/host /home/qmqaq/Anan-s-Sketchbook-Chat-Box-main
             python3 -m pip install --upgrade pip
             # run a verbose build; this will create .buildozer artifacts in repo workspace
             yes | buildozer -v android debug
