@@ -26,10 +26,13 @@ jobs:
           options: >-
             -v ${{ github.workspace }}:/home/user/host
             -e "HOME=/home/user"
+            -e "BUILDOZER_ALLOW_ROOT=1"
             -w /home/user/host/android_kivy
           run: |
             # ensure pip user bin in PATH
             export PATH=$HOME/.local/bin:$PATH
+            # allow buildozer running as root inside container (non-interactive)
+            export BUILDOZER_ALLOW_ROOT=1
             python3 -m pip install --upgrade pip
             # run a verbose build; this will create .buildozer artifacts in repo workspace
             buildozer -v android debug
