@@ -37,10 +37,11 @@ jobs:
             mkdir -p /home/qmqaq
             ln -sfn /home/user/host /home/qmqaq/Anan-s-Sketchbook-Chat-Box-main
             python3 -m pip install --upgrade pip wheel setuptools
-            python3 -m pip install --upgrade cython
-            python3 -V && pip -V
+            # pin cython to <3.0 for buildozer 1.5.1.dev0 compatibility
+            python3 -m pip install --upgrade 'Cython<3.0'
+            python3 -V && pip -V && python3 -c "import Cython; print('Cython version:', Cython.__version__)"
             # run a verbose build; this will create .buildozer artifacts in repo workspace
-            set -euo pipefail
+            set -e
             if ! yes | buildozer -v android debug; then
               echo 'Buildozer failed; dumping p4a/buildozer logs for diagnostics:'
               find . -maxdepth 3 -type f -name "*.log" -print || true
