@@ -21,8 +21,8 @@ android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,READ_MEDIA_IM
 # Use mirror for python-for-android to avoid GitHub connectivity issues
 p4a.url = https://gitclone.com/github.com/kivy/python-for-android.git
 p4a.branch = develop
-p4a.local_recipes = /home/qmqaq/Anan-s-Sketchbook-Chat-Box-main/android_kivy/local_recipes
+p4a.local_recipes = local_recipes
 
 [buildozer]
 log_level = 2
-warn_on_root = 1
+warn_on_root = 0
