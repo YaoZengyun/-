@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Anan Sketchbook",
+    "slug": "anan-sketchbook",
+    "version": "1.0.0",
+    "sdkVersion": "48.0.0",
+    "platforms": ["android", "ios"],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "android": {
+      "package": "com.example.anansketchbook",
+      "versionCode": 1
+    }
+  }
+}

@@ -1,0 +1,5 @@
+/.venv/
+/__pycache__/
+android_kivy/.buildozer/
+android_kivy/bin/
+*.apk

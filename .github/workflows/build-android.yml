@@ -1,0 +1,39 @@
+name: Build Android APK (Kivy)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android_kivy/**'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache buildozer and pip cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            ~/.cache/pip
+          key: buildozer-${{ runner.os }}-${{ hashFiles('android_kivy/buildozer.spec') }}
+
+      - name: Build with Buildozer (Docker)
+        run: |
+          docker pull kivy/buildozer
+          cd android_kivy
+          docker run --rm \
+            -v "$PWD":/home/user/app \
+            -v "$HOME/.buildozer":/home/user/.buildozer \
+            -v "$HOME/.cache/pip":/home/user/.cache/pip \
+            -w /home/user/app \
+            kivy/buildozer buildozer android debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anan-sketchbook-apk
+          path: android_kivy/bin/*.apk
