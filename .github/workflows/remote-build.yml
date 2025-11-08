@@ -36,9 +36,18 @@ jobs:
             # map repo path to the absolute path used in local_recipes file:// URLs
             mkdir -p /home/qmqaq
             ln -sfn /home/user/host /home/qmqaq/Anan-s-Sketchbook-Chat-Box-main
-            python3 -m pip install --upgrade pip
+            python3 -m pip install --upgrade pip wheel setuptools
+            python3 -m pip install --upgrade cython
+            python3 -V && pip -V
             # run a verbose build; this will create .buildozer artifacts in repo workspace
-            yes | buildozer -v android debug
+            set -euo pipefail
+            if ! yes | buildozer -v android debug; then
+              echo 'Buildozer failed; dumping p4a/buildozer logs for diagnostics:'
+              find . -maxdepth 3 -type f -name "*.log" -print || true
+              find .buildozer -type f -name "*.log" -print -exec tail -n +1 {} \; || true
+              find .buildozer -maxdepth 4 -type f -name "*.txt" -print -exec tail -n +200 {} \; || true
+              exit 1
+            fi
 
       - name: Collect built APK artifacts
         run: |

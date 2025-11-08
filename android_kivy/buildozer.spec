@@ -5,7 +5,7 @@ package.domain = org.example
 source.dir = .
 source.include_exts = py,png,ttf,kv,md
 version = 1.0.0
-requirements = python3,kivy,pillow,plyer
+requirements = python3,kivy,pillow,plyer,cython,setuptools,six
 orientation = portrait
 
 # 包含资源
@@ -26,3 +26,4 @@ p4a.local_recipes = local_recipes
 [buildozer]
 log_level = 2
 warn_on_root = 0
+exit_on_error = 1
