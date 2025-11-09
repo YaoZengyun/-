@@ -169,6 +169,55 @@ class Root(BoxLayout):
             print("font.ttf 未找到，界面可能出现乱码。")
             self.app_font = ""
 
+        # 注册接收辅助功能服务广播的监听
+        self._register_accessibility_receiver()
+
+    def _register_accessibility_receiver(self):
+        try:
+            from jnius import autoclass, PythonJavaClass, java_method
+        except Exception as e:
+            print(f"无法加载 pyjnius，辅助功能广播监听未启用: {e}")
+            return
+
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        activity = PythonActivity.mActivity
+        IntentFilter = autoclass('android.content.IntentFilter')
+        filter = IntentFilter('org.anan.sketchbook.ACCESS_SENT_TEXT')
+
+        class Receiver(PythonJavaClass):
+            __javainterfaces__ = ['android/content/BroadcastReceiver']
+            __javacontext__ = 'app'
+
+            @java_method('(Landroid/content/Context;Landroid/content/Intent;)V')
+            def onReceive(self, context, intent):
+                try:
+                    text = intent.getStringExtra('text')
+                    src_pkg = intent.getStringExtra('package')
+                    if text:
+                        print(f"[Accessibility] 收到来自 {src_pkg} 的文本: {text}")
+                        # 更新输入框并生成图片，然后尝试自动分享
+                        self_ref = self_py_ref()
+                        if self_ref is None:
+                            return
+                        ti = self_ref.ids.get('ti')
+                        if ti:
+                            ti.text = text
+                        self_ref.on_generate()
+                        # 可选：自动分享到对应 App
+                        if src_pkg == 'com.tencent.mm':
+                            self_ref.on_share_wechat()
+                        elif src_pkg == 'com.tencent.mobileqq':
+                            self_ref.on_share_qq()
+                except Exception as e:
+                    print(f"广播处理失败: {e}")
+
+        # 保留对 Root 实例的弱引用，避免闭包循环
+        import weakref
+        self_py_ref = weakref.ref(self)
+        recv = Receiver()
+        activity.registerReceiver(recv, filter)
+        print("辅助功能广播接收器已注册。")
+
     def on_kv_post(self, base_widget):
         # 动态生成差分关键词按钮
         kwbox = self.ids.kwbox

@@ -5,7 +5,7 @@ package.domain = org.example
 source.dir = .
 source.include_exts = py,png,ttf,kv,md
 version = 1.0.0
-requirements = python3,kivy,pillow,plyer,cython,setuptools,six
+requirements = python3,kivy,pillow,plyer,pyjnius,cython,setuptools,six
 orientation = portrait
 
 # 包含资源
@@ -27,3 +27,8 @@ android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,READ_MEDIA_IM
 log_level = 2
 warn_on_root = 0
 exit_on_error = 1
+
+# Include native Android sources/resources and manifest additions
+android.add_src = android_src
+android.add_res = android_src/res
+android.add_manifest_xml = android_src/manifest-addition.xml

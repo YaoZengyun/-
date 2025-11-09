@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/app_name"
+    android:accessibilityEventTypes="typeViewTextChanged|typeViewClicked"
+    android:packageNames="com.tencent.mm,com.tencent.mobileqq"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:notificationTimeout="50"
+    android:canRetrieveWindowContent="true"
+    android:settingsActivity=""
+    android:nonInteractiveUiTimeout="1500"
+    android:interactiveUiTimeout="1500" />
