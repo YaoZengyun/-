@@ -23,6 +23,7 @@
 """
 
 from io import BytesIO
+import re
 from pathlib import Path
 
 from kivy.app import App
@@ -34,6 +35,7 @@ from kivy.properties import StringProperty, BooleanProperty
 from kivy.uix.textinput import TextInput
 from kivy.uix.image import Image
 from kivy.uix.button import Button
+from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.label import Label
 from kivy.metrics import dp
 
@@ -110,6 +112,11 @@ KV = """
             text: '清除自定义图片'
             on_release: root.on_clear_image()
             font_name: root.app_font
+        ToggleButton:
+            id: tb_replace
+            text: '自定义图做底图: 开' if self.state=='down' else '自定义图做底图: 关'
+            on_state: root.on_toggle_replace(self.state=='down')
+            font_name: root.app_font
 
     BoxLayout:
         size_hint_y: None
@@ -169,8 +176,8 @@ class Root(BoxLayout):
             print("font.ttf 未找到，界面可能出现乱码。")
             self.app_font = ""
 
-        # 注册接收辅助功能服务广播的监听
-        self._register_accessibility_receiver()
+        # 延迟注册辅助功能广播：放到 on_kv_post 之后，避免过早触发导致启动阶段崩溃
+        self._acc_registered = False
 
     def _register_accessibility_receiver(self):
         try:
@@ -223,21 +230,44 @@ class Root(BoxLayout):
         kwbox = self.ids.kwbox
         for kw in BASEIMAGE_MAPPING.keys():
             btn = Button(text=kw, size_hint=(None, None), height=dp(40), width=dp(90))
+            try:
+                # 强制按钮使用中文字体，避免乱码
+                btn.font_name = self.app_font or btn.font_name
+            except Exception:
+                pass
             btn.bind(on_release=lambda inst, k=kw: self.insert_keyword(k))
             kwbox.add_widget(btn)
+
+        # 在 KV 构建完成后再注册广播，降低启动崩溃风险
+        if not getattr(self, '_acc_registered', False):
+            try:
+                self._register_accessibility_receiver()
+                self._acc_registered = True
+            except Exception as e:
+                print(f"辅助功能广播注册失败: {e}")
 
     def insert_keyword(self, kw: str):
         ti: TextInput = self.ids.ti
         ti.text = (ti.text or "") + kw
 
     def _pick_base_image(self, text: str) -> tuple[str, str]:
+        """解析文本中的底图标记，支持 '#开心#' 或 '##开心##' 等格式。"""
         base = BASEIMAGE_FILE
-        cleaned = text
+        cleaned = text or ""
+        tokens = re.findall(r"#+([^#]+)#+", cleaned)
+        norm = [t.strip() for t in tokens if t.strip()]
+        chosen = None
         for k, v in BASEIMAGE_MAPPING.items():
-            if k in cleaned:
-                base = v
-                cleaned = cleaned.replace(k, "").strip()
+            inner = k.strip('#').strip()
+            if inner in norm or k in cleaned:
+                chosen = (k, v)
                 break
+        if chosen:
+            _, base = chosen
+            cleaned = re.sub(r"#+([^#]+)#+", "", cleaned)
+            for k in BASEIMAGE_MAPPING.keys():
+                cleaned = cleaned.replace(k, "")
+            cleaned = cleaned.strip()
         return base, cleaned
 
     def on_generate(self):
@@ -250,8 +280,18 @@ class Root(BoxLayout):
         overlay = BASE_OVERLAY_FILE if USE_BASE_OVERLAY else None
 
         try:
-            if self._custom_image is not None:
-                # 自定义图片贴入
+            if self._custom_image is not None and getattr(self, 'replace_base', False):
+                png = draw_text_auto(
+                    image_source=self._custom_image,
+                    image_overlay=overlay,
+                    top_left=TEXT_BOX_TOPLEFT,
+                    bottom_right=IMAGE_BOX_BOTTOMRIGHT,
+                    text=cleaned,
+                    color=(0, 0, 0),
+                    max_font_height=64,
+                    font_path=FONT_FILE,
+                )
+            elif self._custom_image is not None:
                 png = paste_image_auto(
                     image_source=base_image_file,
                     image_overlay=overlay,
@@ -265,7 +305,6 @@ class Root(BoxLayout):
                     keep_alpha=True,
                 )
             else:
-                # 文本绘制
                 png = draw_text_auto(
                     image_source=base_image_file,
                     image_overlay=overlay,
