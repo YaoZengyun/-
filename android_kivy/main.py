@@ -123,6 +123,14 @@ KV = """
             text: '保存 PNG'
             on_release: root.on_save()
             font_name: root.app_font
+        Button:
+            text: '分享微信'
+            on_release: root.on_share_wechat()
+            font_name: root.app_font
+        Button:
+            text: '分享QQ'
+            on_release: root.on_share_qq()
+            font_name: root.app_font
 
     Image:
         id: preview
@@ -235,6 +243,99 @@ class Root(BoxLayout):
         out = Path(App.get_running_app().user_data_dir) / "output.png"
         out.write_bytes(self._last_png)
         print(f"Saved: {out}")
+
+    # --- Share helpers ---
+    def _share_last_png(self, package: str | None):
+        if not self._last_png:
+            print("没有可分享的图片，请先生成。")
+            return
+        try:
+            from jnius import autoclass, cast
+        except Exception as e:
+            print(f"分享失败（缺少 pyjnius/Android 环境）: {e}")
+            return
+
+        # 1) 将图片写入到媒体库，获取 content:// Uri
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        activity = PythonActivity.mActivity
+        MediaStore = autoclass('android.provider.MediaStore')
+        ContentValues = autoclass('android.content.ContentValues')
+        String = autoclass('java.lang.String')
+        resolver = activity.getContentResolver()
+
+        values = ContentValues()
+        values.put(String('title'), String('anan_sketchbook.png'))
+        values.put(String('mime_type'), String('image/png'))
+        images_uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        out_uri = resolver.insert(images_uri, values)
+        if out_uri is None:
+            print("无法写入媒体库，改为仅保存到应用目录后分享。")
+            out = Path(App.get_running_app().user_data_dir) / "share.png"
+            out.write_bytes(self._last_png)
+            # 尝试使用 file:// 可能在高版本失败
+            try:
+                Intent = autoclass('android.content.Intent')
+                Uri = autoclass('android.net.Uri')
+                File = autoclass('java.io.File')
+                intent = Intent(Intent.ACTION_SEND)
+                intent.setType('image/png')
+                file_uri = Uri.fromFile(File(str(out)))
+                intent.putExtra(Intent.EXTRA_STREAM, cast('android.os.Parcelable', file_uri))
+                intent.addFlags(1)  # FLAG_GRANT_READ_URI_PERMISSION
+                if package:
+                    intent.setPackage(package)
+                activity.startActivity(intent)
+            except Exception as e:
+                print(f"分享失败: {e}")
+            return
+
+        # 写入字节到 Uri 的输出流
+        try:
+            output_stream = resolver.openOutputStream(out_uri)
+            # 将 python bytes 拆块写入 Java OutputStream
+            chunk = 4096
+            data = self._last_png
+            # jnius 对于 Python bytes 支持 write(bytearray)
+            from array import array
+            idx = 0
+            while idx < len(data):
+                part = data[idx: idx + chunk]
+                ba = bytearray(part)
+                output_stream.write(ba)
+                idx += chunk
+            output_stream.flush()
+            output_stream.close()
+        except Exception as e:
+            print(f"写入媒体库失败: {e}")
+
+        # 2) 发送分享 Intent（尝试直达指定包名，否则弹系统分享面板）
+        try:
+            Intent = autoclass('android.content.Intent')
+            intent = Intent(Intent.ACTION_SEND)
+            intent.setType('image/png')
+            intent.putExtra(Intent.EXTRA_STREAM, out_uri)
+            # 需要授予读取权限
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if package:
+                intent.setPackage(package)
+                try:
+                    activity.startActivity(intent)
+                    return
+                except Exception:
+                    # 如果目标 app 不可用，回退到 chooser
+                    pass
+            chooser = Intent.createChooser(intent, String('分享图片'))
+            activity.startActivity(chooser)
+        except Exception as e:
+            print(f"启动分享失败: {e}")
+
+    def on_share_wechat(self):
+        # com.tencent.mm 为微信包名
+        self._share_last_png('com.tencent.mm')
+
+    def on_share_qq(self):
+        # com.tencent.mobileqq 为 QQ 包名
+        self._share_last_png('com.tencent.mobileqq')
 
     def on_start_toggle(self, flag: bool):
         self.active = flag
