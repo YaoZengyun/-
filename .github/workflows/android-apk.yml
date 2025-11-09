@@ -1,0 +1,45 @@
+name: Android APK (Buildozer Docker)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android_kivy/**'
+      - '.github/workflows/android-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build APK with Buildozer (Docker)
+        run: |
+          set -eux
+          docker pull kivy/buildozer:latest
+          docker run --rm \
+            -v "$PWD/android_kivy":/home/user/app \
+            -w /home/user/app \
+            -e BUILDOZER_WARN_ON_ROOT=0 \
+            kivy/buildozer:latest \
+            buildozer -v android debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anan-sketchbook-apk
+          path: android_kivy/bin/*.apk
+          if-no-files-found: error
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-logs
+          path: |
+            android_kivy/.buildozer/android/platform/build-*/*/logs/**
+            android_kivy/.buildozer/android/platform/python-for-android/**/*.log
+            android_kivy/.buildozer/**/log.txt
+          if-no-files-found: warn
