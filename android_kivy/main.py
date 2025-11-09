@@ -29,6 +29,7 @@ from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.boxlayout import BoxLayout
 from kivy.core.image import Image as CoreImage
+from kivy.core.text import LabelBase
 from kivy.properties import StringProperty, BooleanProperty
 from kivy.uix.textinput import TextInput
 from kivy.uix.image import Image
@@ -59,12 +60,15 @@ KV = """
     orientation: 'vertical'
     padding: dp(12)
     spacing: dp(8)
+    # 统一指定中文字体，避免 Android 默认字体缺失导致乱码
+    # root.app_font 在 Root.__init__ 中设定为注册的字体名
 
     Label:
         text: '安安的素描本 (离线 APK)'
         font_size: '20sp'
         size_hint_y: None
         height: self.texture_size[1] + dp(6)
+        font_name: root.app_font
 
     TextInput:
         id: ti
@@ -72,6 +76,7 @@ KV = """
         size_hint_y: None
         height: dp(120)
         multiline: True
+        font_name: root.app_font
 
     ScrollView:
         size_hint_y: None
@@ -92,15 +97,19 @@ KV = """
         Button:
             text: '启动'
             on_release: root.on_start_toggle(True)
+            font_name: root.app_font
         Button:
             text: '终止'
             on_release: root.on_start_toggle(False)
+            font_name: root.app_font
         Button:
             text: '选择自定义图片'
             on_release: root.on_choose_image()
+            font_name: root.app_font
         Button:
             text: '清除自定义图片'
             on_release: root.on_clear_image()
+            font_name: root.app_font
 
     BoxLayout:
         size_hint_y: None
@@ -109,9 +118,11 @@ KV = """
         Button:
             text: '生成图片'
             on_release: root.on_generate()
+            font_name: root.app_font
         Button:
             text: '保存 PNG'
             on_release: root.on_save()
+            font_name: root.app_font
 
     Image:
         id: preview
@@ -124,6 +135,7 @@ KV = """
         text: root.custom_image_hint
         size_hint_y: None
         height: self.texture_size[1] + dp(6)
+        font_name: root.app_font
 """
 
 
@@ -133,6 +145,21 @@ class Root(BoxLayout):
     active = BooleanProperty(True)
     _last_png = b""
     _custom_image = None  # PIL Image or None
+    app_font = StringProperty("AppFont")  # 注册字体的内部名称
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # 在应用启动前注册字体，确保中文/全角括号显示正常
+        font_path = Path(__file__).parent / "font.ttf"
+        if font_path.exists():
+            try:
+                LabelBase.register(name="AppFont", fn_regular=str(font_path))
+            except Exception as e:
+                print(f"字体注册失败，退回默认字体: {e}")
+                self.app_font = ""  # 空则使用默认
+        else:
+            print("font.ttf 未找到，界面可能出现乱码。")
+            self.app_font = ""
 
     def on_kv_post(self, base_widget):
         # 动态生成差分关键词按钮
