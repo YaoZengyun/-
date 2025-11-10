@@ -23,8 +23,8 @@ android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,READ_MEDIA_IM
 # 使用 gitclone 镜像以避免直接访问 github 失败
 p4a.url = https://gitclone.com/github.com/kivy/python-for-android.git
 p4a.branch = develop
-# 如需本地自定义配方，可启用：
-# p4a.local_recipes = local_recipes
+# 启用本地自定义配方，减少外网依赖
+p4a.local_recipes = local_recipes
 
 [buildozer]
 log_level = 2

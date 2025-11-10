@@ -31,7 +31,7 @@ jobs:
             --entrypoint /bin/bash
             -w /home/user/host/android_kivy
           run: >-
-            -lc 'set -eux; 
+            -c 'set -eux; 
               export PATH=$HOME/.local/bin:$PATH; 
               export BUILDOZER_ALLOW_ROOT=1; 
               export SDK_ROOT=${ANDROID_SDK_ROOT}; 

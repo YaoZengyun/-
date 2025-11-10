@@ -32,7 +32,7 @@ jobs:
             -w /home/user/app \
             -e ANDROID_SDK_ROOT=/home/user/.buildozer/android/platform/android-sdk \
             --entrypoint /bin/bash \
-            kivy/buildozer -lc 'set -eux; \
+            kivy/buildozer -c 'set -eux; \
               export SDK_ROOT=${ANDROID_SDK_ROOT}; \
               buildozer android debug || true; \
               yes | ${SDK_ROOT}/tools/bin/sdkmanager --sdk_root=${SDK_ROOT} --licenses || true; \
