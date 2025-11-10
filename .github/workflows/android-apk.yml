@@ -24,8 +24,9 @@ jobs:
             -w /home/user/app \
             -e BUILDOZER_WARN_ON_ROOT=0 \
             -e ANDROID_SDK_ROOT=/home/user/.buildozer/android/platform/android-sdk \
+            --entrypoint /bin/bash \
             kivy/buildozer:latest \
-            bash -lc 'set -eux; \
+            -lc 'set -eux; \
               export SDK_ROOT=${ANDROID_SDK_ROOT}; \
               # Trigger initial SDK download so sdkmanager path exists
               buildozer android debug || true; \

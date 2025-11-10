@@ -31,7 +31,8 @@ jobs:
             -v "$HOME/.cache/pip":/home/user/.cache/pip \
             -w /home/user/app \
             -e ANDROID_SDK_ROOT=/home/user/.buildozer/android/platform/android-sdk \
-            kivy/buildozer bash -lc 'set -eux; \
+            --entrypoint /bin/bash \
+            kivy/buildozer -lc 'set -eux; \
               export SDK_ROOT=${ANDROID_SDK_ROOT}; \
               buildozer android debug || true; \
               yes | ${SDK_ROOT}/tools/bin/sdkmanager --sdk_root=${SDK_ROOT} --licenses || true; \
