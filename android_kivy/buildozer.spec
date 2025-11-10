@@ -13,7 +13,7 @@ include_patterns = BaseImages/*, font.ttf
 
 # 最低与目标 API（按需调整）
 android.api = 33
-android.minapi = 21
+android.minapi = 24
 android.archs = arm64-v8a
 
 # 权限可按需添加
