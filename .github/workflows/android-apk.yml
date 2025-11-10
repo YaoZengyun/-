@@ -23,8 +23,17 @@ jobs:
             -v "$PWD/android_kivy":/home/user/app \
             -w /home/user/app \
             -e BUILDOZER_WARN_ON_ROOT=0 \
+            -e ANDROID_SDK_ROOT=/home/user/.buildozer/android/platform/android-sdk \
             kivy/buildozer:latest \
-            -v android debug
+            bash -lc 'set -eux; \
+              export SDK_ROOT=${ANDROID_SDK_ROOT}; \
+              # Trigger initial SDK download so sdkmanager path exists
+              buildozer android debug || true; \
+              # Accept SDK licenses and install required tools non-interactively
+              yes | ${SDK_ROOT}/tools/bin/sdkmanager --sdk_root=${SDK_ROOT} --licenses || true; \
+              yes | ${SDK_ROOT}/tools/bin/sdkmanager --sdk_root=${SDK_ROOT} "platform-tools" "build-tools;36.1.0" || true; \
+              # Run verbose build
+              buildozer -v android debug'
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

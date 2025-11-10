@@ -27,19 +27,25 @@ jobs:
             -v ${{ github.workspace }}:/home/user/host
             -e "HOME=/home/user"
             -e "BUILDOZER_ALLOW_ROOT=1"
+            -e "ANDROID_SDK_ROOT=/home/user/.buildozer/android/platform/android-sdk"
             -w /home/user/host/android_kivy
           run: |
             # ensure pip user bin in PATH
             export PATH=$HOME/.local/bin:$PATH
             # allow buildozer running as root inside container (non-interactive)
             export BUILDOZER_ALLOW_ROOT=1
+            export SDK_ROOT=${ANDROID_SDK_ROOT}
             python3 -m pip install --upgrade pip wheel setuptools
             # pin cython to <3.0 for buildozer 1.5.1.dev0 compatibility
             python3 -m pip install --upgrade 'Cython<3.0'
             python3 -V && pip -V && python3 -c "import Cython; print('Cython version:', Cython.__version__)"
             # run a verbose build; this will create .buildozer artifacts in repo workspace
             set -e
-            if ! yes | buildozer -v android debug; then
+            # first pass to download SDK, then accept licenses and install build-tools
+            buildozer android debug || true
+            yes | ${SDK_ROOT}/tools/bin/sdkmanager --sdk_root=${SDK_ROOT} --licenses || true
+            yes | ${SDK_ROOT}/tools/bin/sdkmanager --sdk_root=${SDK_ROOT} "platform-tools" "build-tools;36.1.0" || true
+            if ! buildozer -v android debug; then
               echo 'Buildozer failed; dumping p4a/buildozer logs for diagnostics:'
               find . -maxdepth 3 -type f -name "*.log" -print || true
               find .buildozer -type f -name "*.log" -print -exec tail -n +1 {} \; || true
