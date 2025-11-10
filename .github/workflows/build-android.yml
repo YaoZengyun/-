@@ -30,7 +30,7 @@ jobs:
             -v "$HOME/.buildozer":/home/user/.buildozer \
             -v "$HOME/.cache/pip":/home/user/.cache/pip \
             -w /home/user/app \
-            kivy/buildozer buildozer android debug
+            kivy/buildozer -v android debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
