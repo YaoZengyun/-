@@ -23,6 +23,7 @@
 """
 
 from io import BytesIO
+import json
 import re
 from pathlib import Path
 
@@ -38,6 +39,8 @@ from kivy.uix.button import Button
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.label import Label
 from kivy.metrics import dp
+from kivy.clock import Clock
+from kivy.uix.popup import Popup
 
 from config_mobile import (
     FONT_FILE,
@@ -82,62 +85,80 @@ KV = """
 
     ScrollView:
         size_hint_y: None
-        height: dp(50)
+        height: dp(54)
         do_scroll_y: False
         BoxLayout:
             id: kwbox
             size_hint_x: None
             width: self.minimum_width
-            height: dp(50)
-            spacing: dp(8)
+            height: dp(54)
+            spacing: dp(6)
             padding: 0,0
 
     BoxLayout:
         size_hint_y: None
-        height: dp(44)
+        height: dp(52)
         spacing: dp(8)
         Button:
             text: '启动'
             on_release: root.on_start_toggle(True)
             font_name: root.app_font
+            text_size: self.size
+            shorten: True
         Button:
-            text: '终止'
+            text: '停止'
             on_release: root.on_start_toggle(False)
             font_name: root.app_font
+            text_size: self.size
+            shorten: True
         Button:
-            text: '选择自定义图片'
+            text: '选图'
             on_release: root.on_choose_image()
             font_name: root.app_font
+            text_size: self.size
+            shorten: True
         Button:
-            text: '清除自定义图片'
+            text: '清图'
             on_release: root.on_clear_image()
             font_name: root.app_font
+            text_size: self.size
+            shorten: True
         ToggleButton:
             id: tb_replace
-            text: '自定义图做底图: 开' if self.state=='down' else '自定义图做底图: 关'
+            text: '做底图(开)' if self.state=='down' else '做底图(关)'
             on_state: root.on_toggle_replace(self.state=='down')
             font_name: root.app_font
+            text_size: self.size
+            shorten: True
 
     BoxLayout:
         size_hint_y: None
-        height: dp(44)
+        height: dp(52)
         spacing: dp(8)
         Button:
-            text: '生成图片'
+            text: '生成'
             on_release: root.on_generate()
             font_name: root.app_font
+            text_size: self.size
+            shorten: True
         Button:
-            text: '保存 PNG'
+            text: '保存'
             on_release: root.on_save()
             font_name: root.app_font
+            text_size: self.size
+            shorten: True
         Button:
-            text: '分享微信'
+            text: '发微信'
             on_release: root.on_share_wechat()
             font_name: root.app_font
+            text_size: self.size
+            shorten: True
         Button:
-            text: '分享QQ'
+            text: '发QQ'
             on_release: root.on_share_qq()
             font_name: root.app_font
+            text_size: self.size
+            shorten: True
 
     Image:
         id: preview
@@ -178,6 +199,8 @@ class Root(BoxLayout):
 
         # 延迟注册辅助功能广播：放到 on_kv_post 之后，避免过早触发导致启动阶段崩溃
         self._acc_registered = False
+        self._acc_receiver = None
+        self.replace_base = False
 
     def _register_accessibility_receiver(self):
         try:
@@ -223,9 +246,13 @@ class Root(BoxLayout):
         self_py_ref = weakref.ref(self)
         recv = Receiver()
         activity.registerReceiver(recv, filter)
+        self._acc_receiver = recv  # 保持引用，避免被 GC
         print("辅助功能广播接收器已注册。")
 
     def on_kv_post(self, base_widget):
+        # Android 动态权限弹窗（首次启动提示，一键授权；桌面环境自动跳过）
+        self._maybe_show_permission_prompt()
+
         # 动态生成差分关键词按钮
         kwbox = self.ids.kwbox
         for kw in BASEIMAGE_MAPPING.keys():
@@ -249,6 +276,12 @@ class Root(BoxLayout):
     def insert_keyword(self, kw: str):
         ti: TextInput = self.ids.ti
         ti.text = (ti.text or "") + kw
+
+    def on_toggle_replace(self, is_on: bool):
+        self.replace_base = is_on
+        # 可以更新提示
+        state = "开" if is_on else "关"
+        self.custom_image_hint = f"(自定义图做底图：{state})"
 
     def _pick_base_image(self, text: str) -> tuple[str, str]:
         """解析文本中的底图标记，支持 '#开心#' 或 '##开心##' 等格式。"""
@@ -338,84 +371,96 @@ class Root(BoxLayout):
             print("没有可分享的图片，请先生成。")
             return
         try:
-            from jnius import autoclass, cast
+            import threading
+            from jnius import autoclass, cast, PythonJavaClass, java_method
         except Exception as e:
             print(f"分享失败（缺少 pyjnius/Android 环境）: {e}")
             return
 
-        # 1) 将图片写入到媒体库，获取 content:// Uri
-        PythonActivity = autoclass('org.kivy.android.PythonActivity')
-        activity = PythonActivity.mActivity
-        MediaStore = autoclass('android.provider.MediaStore')
-        ContentValues = autoclass('android.content.ContentValues')
-        String = autoclass('java.lang.String')
-        resolver = activity.getContentResolver()
-
-        values = ContentValues()
-        values.put(String('title'), String('anan_sketchbook.png'))
-        values.put(String('mime_type'), String('image/png'))
-        images_uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-        out_uri = resolver.insert(images_uri, values)
-        if out_uri is None:
-            print("无法写入媒体库，改为仅保存到应用目录后分享。")
-            out = Path(App.get_running_app().user_data_dir) / "share.png"
-            out.write_bytes(self._last_png)
-            # 尝试使用 file:// 可能在高版本失败
+        # 在后台线程中执行写入媒体库，避免卡死 UI
+        def worker():
             try:
-                Intent = autoclass('android.content.Intent')
-                Uri = autoclass('android.net.Uri')
-                File = autoclass('java.io.File')
-                intent = Intent(Intent.ACTION_SEND)
-                intent.setType('image/png')
-                file_uri = Uri.fromFile(File(str(out)))
-                intent.putExtra(Intent.EXTRA_STREAM, cast('android.os.Parcelable', file_uri))
-                intent.addFlags(1)  # FLAG_GRANT_READ_URI_PERMISSION
-                if package:
-                    intent.setPackage(package)
-                activity.startActivity(intent)
+                PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                activity = PythonActivity.mActivity
+                MediaStore = autoclass('android.provider.MediaStore')
+                ContentValues = autoclass('android.content.ContentValues')
+                String = autoclass('java.lang.String')
+                resolver = activity.getContentResolver()
+
+                values = ContentValues()
+                values.put(String('title'), String('anan_sketchbook.png'))
+                values.put(String('mime_type'), String('image/png'))
+                images_uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                out_uri = resolver.insert(images_uri, values)
+                if out_uri is None:
+                    print("无法写入媒体库，改为仅保存到应用目录后分享。")
+                    out = Path(App.get_running_app().user_data_dir) / "share.png"
+                    out.write_bytes(self._last_png)
+                    File = autoclass('java.io.File')
+                    Uri = autoclass('android.net.Uri')
+                    file_uri = Uri.fromFile(File(str(out)))
+                    intent = _build_intent(file_uri)
+                    _start_intent_on_ui(activity, intent)
+                    return
+
+                # 写入图片数据
+                try:
+                    output_stream = resolver.openOutputStream(out_uri)
+                    chunk = 4096
+                    data = self._last_png
+                    idx = 0
+                    while idx < len(data):
+                        part = data[idx: idx + chunk]
+                        ba = bytearray(part)
+                        output_stream.write(ba)
+                        idx += chunk
+                    output_stream.flush()
+                    output_stream.close()
+                except Exception as e:
+                    print(f"写入媒体库失败: {e}")
+
+                # 构建分享 Intent 并在 UI 线程启动
+                intent = _build_intent(out_uri)
+                _start_intent_on_ui(activity, intent)
             except Exception as e:
-                print(f"分享失败: {e}")
-            return
+                print(f"分享流程异常: {e}")
 
-        # 写入字节到 Uri 的输出流
-        try:
-            output_stream = resolver.openOutputStream(out_uri)
-            # 将 python bytes 拆块写入 Java OutputStream
-            chunk = 4096
-            data = self._last_png
-            # jnius 对于 Python bytes 支持 write(bytearray)
-            from array import array
-            idx = 0
-            while idx < len(data):
-                part = data[idx: idx + chunk]
-                ba = bytearray(part)
-                output_stream.write(ba)
-                idx += chunk
-            output_stream.flush()
-            output_stream.close()
-        except Exception as e:
-            print(f"写入媒体库失败: {e}")
-
-        # 2) 发送分享 Intent（尝试直达指定包名，否则弹系统分享面板）
-        try:
+        def _build_intent(stream_uri):
             Intent = autoclass('android.content.Intent')
             intent = Intent(Intent.ACTION_SEND)
             intent.setType('image/png')
-            intent.putExtra(Intent.EXTRA_STREAM, out_uri)
-            # 需要授予读取权限
+            intent.putExtra(Intent.EXTRA_STREAM, stream_uri)
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             if package:
                 intent.setPackage(package)
-                try:
-                    activity.startActivity(intent)
-                    return
-                except Exception:
-                    # 如果目标 app 不可用，回退到 chooser
-                    pass
-            chooser = Intent.createChooser(intent, String('分享图片'))
-            activity.startActivity(chooser)
-        except Exception as e:
-            print(f"启动分享失败: {e}")
+            return intent
+
+        def _start_intent_on_ui(activity, intent):
+            class Runnable(PythonJavaClass):
+                __javainterfaces__ = ['java/lang/Runnable']
+                __javacontext__ = 'app'
+                def __init__(self, _intent):
+                    super().__init__()
+                    self._intent = _intent
+                @java_method('()V')
+                def run(self):
+                    try:
+                        # 若目标包不可用，则回退 chooser
+                        activity.startActivity(self._intent)
+                    except Exception:
+                        Intent = autoclass('android.content.Intent')
+                        String = autoclass('java.lang.String')
+                        chooser = Intent.createChooser(self._intent, String('分享图片'))
+                        activity.startActivity(chooser)
+
+            try:
+                activity.runOnUiThread(Runnable(intent))
+            except Exception as e:
+                print(f"UI 线程启动失败: {e}")
+
+        threading.Thread(target=worker, daemon=True).start()
+        # 上面的后台线程已经完成写入与分享，这里直接返回，避免重复执行导致双重插入或 UI 线程错误
+        return
 
     def on_share_wechat(self):
         # com.tencent.mm 为微信包名
@@ -457,6 +502,126 @@ class Root(BoxLayout):
     def on_clear_image(self):
         self._custom_image = None
         self.custom_image_hint = "(当前未选择自定义图片，使用文字生成)"
+
+    def _request_runtime_permissions(self):
+        """Android 6+ 需要在运行时动态申请外部存储/媒体库权限。桌面忽略。"""
+        try:
+            from jnius import autoclass
+            from android.permissions import request_permissions, Permission
+        except Exception:
+            return
+
+        try:
+            Build = autoclass('android.os.Build')
+            VERSION = autoclass('android.os.Build$VERSION')
+            sdk_int = VERSION.SDK_INT
+            perms = []
+            if sdk_int >= 33:  # Android 13+ 使用 READ_MEDIA_IMAGES
+                perms = [Permission.READ_MEDIA_IMAGES]
+            else:
+                perms = [Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
+            if perms:
+                try:
+                    # 支持回调：授予后提示一次
+                    def _cb(perm, results):
+                        print(f"权限结果: {list(zip(perm, results))}")
+                    request_permissions(perms, _cb)
+                except TypeError:
+                    request_permissions(perms)
+        except Exception as e:
+            print(f"请求权限失败: {e}")
+
+    def _maybe_show_permission_prompt(self):
+        """首次启动弹窗，说明并引导授权所需权限与可选辅助功能。"""
+        try:
+            # 非 Android 直接跳过
+            import jnius  # noqa: F401
+        except Exception:
+            return
+
+        try:
+            from kivy.app import App as _App
+            flag_dir = Path(_App.get_running_app().user_data_dir)
+        except Exception:
+            return
+
+        flag_dir.mkdir(parents=True, exist_ok=True)
+        flag_file = flag_dir / "first_run_permissions.json"
+        if flag_file.exists():
+            # 已提示过，不再重复
+            return
+
+        msg = (
+            "为了保存/分享图片以及从相册选择自定义图片，需要授予‘读取媒体/存储’权限。\n\n"
+            "若希望在微信/QQ 发送时自动生成并分享，还需在系统‘辅助功能’中启用本应用的服务（可选）。"
+        )
+
+        content = BoxLayout(orientation='vertical', spacing=dp(8), padding=dp(8))
+        lbl = Label(text=msg, text_size=(dp(300), None), size_hint_y=None)
+        # 让多行文本自适应高度
+        def _resize_label(*_):
+            lbl.texture_update()
+            lbl.height = lbl.texture_size[1]
+        Clock.schedule_once(_resize_label, 0)
+        content.add_widget(lbl)
+
+        btns = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(8))
+        b_grant = Button(text='授予权限')
+        b_access = Button(text='打开辅助功能')
+        b_later = Button(text='以后再说')
+        btns.add_widget(b_grant)
+        btns.add_widget(b_access)
+        btns.add_widget(b_later)
+        content.add_widget(btns)
+
+        popup = Popup(title='需要的权限', content=content, size_hint=(0.9, None))
+        # 动态设置高度
+        def _resize_popup(*_):
+            total_h = sum(child.height for child in content.children) + dp(80)
+            popup.height = max(dp(220), total_h)
+        Clock.schedule_once(_resize_popup, 0)
+
+        def _on_grant(_):
+            self._request_runtime_permissions()
+            # 标记已提示
+            try:
+                flag_file.write_text(json.dumps({"prompted": True}, ensure_ascii=False))
+            except Exception:
+                pass
+            popup.dismiss()
+
+        def _on_access(_):
+            self._open_accessibility_settings()
+
+        def _on_later(_):
+            # 首次也写入，避免每次进入都弹，可在设置里再做入口（后续可加）
+            try:
+                flag_file.write_text(json.dumps({"prompted": True, "later": True}, ensure_ascii=False))
+            except Exception:
+                pass
+            popup.dismiss()
+
+        b_grant.bind(on_release=_on_grant)
+        b_access.bind(on_release=_on_access)
+        b_later.bind(on_release=_on_later)
+
+        popup.open()
+
+    def _open_accessibility_settings(self):
+        """跳转到系统‘辅助功能’设置。桌面忽略。"""
+        try:
+            from jnius import autoclass
+        except Exception:
+            return
+        try:
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            activity = PythonActivity.mActivity
+            Intent = autoclass('android.content.Intent')
+            Settings = autoclass('android.provider.Settings')
+            intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            activity.startActivity(intent)
+        except Exception as e:
+            print(f"无法打开辅助功能设置: {e}")
 
 
 class AnanOfflineApp(App):

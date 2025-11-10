@@ -1,89 +1,141 @@
-<<<<<<< HEAD
 # 安安的素描本聊天框
 
-本项目是一个将你在一个文本输入框中的文字或图片写到安安的素描本上的项目
+将输入框中的文字或图片“贴”到安安的素描本上，支持自动换底图、括号着色、高度自适应排版、以及（Windows 端）自动截获快捷键、剪贴板图片贴入等功能。现已补充移动端与离线 APK 打包方案。
 
-## AI声明
+## AI 声明
 
-本项目90%的代码由AI生成
+本项目 90% 代码由 AI 协助生成与重构，人工主要负责需求描述与测试调优。
 
-## 部署
+## 目录结构速览
 
-本项目只支持windows
+```
+api.py                # FastAPI 后端（可被移动端或其他客户端调用）
+main.py               # Windows 热键版本（依赖 keyboard/pywin32）
+android_main.py       # Kivy 安卓入口（离线本地生成，不依赖后端）
+image_fit_paste.py    # 图片自适应粘贴算法
+text_fit_draw.py      # 文本自适应排版 + 括号着色逻辑
+config.py             # 配置：底图、坐标、字体、热键等
+BaseImages/           # 底图与遮挡图层
+mobile/               # 简易 React Native 示例（走后端接口）
+buildozer.spec        # 安卓打包配置（Kivy/Buildozer）
+font.ttf              # 字体文件（请确认版权许可后再分发）
+```
 
-现在字体文件和安安图片已经内置于项目中, 无需再额外置入DLC.
+## 功能要点
 
-其中`font.ttf`为字体文件, 可以自由修改成其他字体, 本项目不拥有字体版权, 仅做引用.
+- 文本模式：自动计算最大可用字体大小，支持括号 [ ] / 【 】 内文字着色。
+- 图片模式：剪贴板图像（Windows）或用户选择图片（安卓）按 contain 规则缩放粘贴。
+- 底图切换：在文本中出现映射关键词（如 `#开心#`）自动更换底图并移除关键词。
+- 置顶遮挡：`BASE_OVERLAY_FILE` 可用于模拟前景遮挡效果。
+- 安卓离线：无需网络，直接在设备上生成 PNG 可保存或分享。
 
-底图存储于`BaseImages`目录中, 其中`base.png`为安安拿素描本的照片, `base_overlay.png`为透明底的安安袖子, 用于防止文字和图片覆盖在袖子上方. 如果分辨率不一样的安安图片, 需要修改`config.py`的 `TEXT_BOX_TOPLEFT` 和 `IMAGE_BOX_BOTTOMRIGHT`, 定义文本框的大小.
+## Windows 部署与使用（main.py）
 
-依赖库安装: `pip install -r requirements.txt `
+1. 安装依赖：
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. 运行：
+   ```bash
+   python main.py
+   ```
+3. 在允许的进程（例如 QQ、微信）焦点窗口中按下配置的热键（默认 Enter）→ 自动截获文本/图片 → 生成并复制图片 → 自动粘贴与发送（取决于配置）。
 
-## 使用
+关键配置位于 `config.py`：
 
-使用文本编辑器打开`config.py`即可看到方便修改的参数, 可以设置热键, 图片路径, 字体路径, 指定的应用, 表情差分关键词等
+- `HOTKEY` / `BLOCK_HOTKEY`：生成触发与是否阻塞原按键。
+- `BASEIMAGE_MAPPING`：关键词到底图文件映射，可自行扩展。
+- `TEXT_BOX_TOPLEFT` / `IMAGE_BOX_BOTTOMRIGHT`：文本/图片绘制区域。
+- `FONT_FILE`：字体文件路径（确保包含中文与符号）。
 
-运行`main.py`即可开始监听回车, 在指定应用中按下回车会自动拦截按键, 生成图片后自动发送 (自动发送功能可以在`config.py`中关闭).
+出现生成延迟或剪贴板异常时，可增大 `DELAY`。
 
-特殊的, 在文本中输入\[\]或者【】, 被包裹的字符会变成紫色.
+## FastAPI 后端（api.py）
 
-输入文本框中的图片也可以被直接绘制在素描本上.
+适用于移动端前后端分离或局域网访问：
 
-输入`#普通#`, `#开心#`, `#生气#`, `#无语#`, `#脸红#`, `#病娇#`可以切换标签差分, 一次切换一直有效. 可以通过修改`BASEIMAGE_MAPPING`来增加更多查分
+1. 安装依赖：同上。
+2. 启动：
+   ```bash
+   python api.py
+   ```
+3. 测试：访问 `http://127.0.0.1:8000/` 或调用接口：
+   - `GET /bases` 列出可用底图。
+   - `POST /generate` 根据文本或图片生成 PNG（返回 base64）。
 
-如果发送失败等可以尝试适当增大`main.py`第10行的`DELAY`
-
-## 其他分支
-
-
-## 移动端方案（推荐）：后端 API + 移动前端
-
-本仓库已新增 `api.py`，将文字/图片绘制能力通过 HTTP 接口暴露，便于移动端（如 React Native/Expo、Flutter 或任意 WebView/PWA）调用。
-
-### 启动后端 API（Windows PowerShell）
-
-1. 安装依赖（只需一次）：
-	 ```powershell
-	 pip install -r requirements.txt
-	 ```
-2. 启动服务（默认端口 8000）：
-	 ```powershell
-	 python api.py
-	 ```
-3. 打开浏览器访问 http://127.0.0.1:8000/ 验证；也可访问 http://127.0.0.1:8000/bases 查看可用底图映射。
-
-### 接口说明
-
-
-请求（JSON）：
+示例请求：
 ```json
 {
-	"text": "你好【安安】",
-	"image_base64": null,
-	"base_key": "#开心#",
-	"use_overlay": true
+  "text": "你好【安安】#开心#",
+  "image_base64": null,
+  "base_key": null,
+  "use_overlay": true
 }
 ```
 
-说明：
+移动端（React Native/Expo）调用示例见 `mobile/App.js`。
 
-### 移动端前端（建议）
+## 安卓离线 APK（Kivy + Buildozer）
 
-建议使用 Expo（React Native）快速实现：在移动端输入文字或选择图片，调用 `/generate` 获取图片后展示或保存。你可以在任意项目中直接使用如下请求示例：
+`android_main.py` 提供一个最小 Kivy UI：
 
-```js
-async function generateFromText(text) {
-	const res = await fetch("http://<你的电脑IP>:8000/generate", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ text })
-	});
-	const data = await res.json();
-	return data.image_base64; // data:image/png;base64,...
-}
+- 文本输入框与“生成”按钮。
+- 关键词按钮快速插入 `#开心#` 等。
+- 可选择自定义图片作为内容贴入。
+- 保存生成结果为 PNG。
+
+### 1. 开发机（Linux 推荐）准备
+
+```bash
+pip install buildozer
+sudo apt-get install -y git python3-pip openjdk-17-jdk unzip
+buildozer init            # 若已存在 buildozer.spec 可跳过
 ```
 
-如需我在本仓库下新增最小的 Expo 示例工程（`mobile/` 目录），请告诉我你的偏好（Expo/Flutter/uni-app 等）与目标平台（Android/iOS）。
-=======
-# -
->>>>>>> origin/main
+本仓库已附带 `buildozer.spec`，其中 `requirements` 仅包含 `python3,kivy,pillow`，避免引入 Windows 专属库。
+
+### 2. 本地调试
+
+```bash
+python android_main.py   # 使用桌面窗口验证 UI 与生成逻辑
+```
+
+### 3. 打包 APK
+
+```bash
+buildozer -v android debug
+```
+
+生成的 APK 位于 `bin/` 目录，可直接安装到手机（需允许未知来源应用）。第一次构建会下载 NDK/SDK，耗时较长。
+
+### 4. 常见问题
+
+- 字体不显示中文：确认 `font.ttf` 覆盖并在安卓端可被加载；若失败可替换为 NotoSansCJK。 
+- 图片路径分隔符：原配置使用反斜杠，代码中已自动标准化为跨平台路径。 
+- 构建失败（Cython 版本）：当前不依赖 Cython；如后续增加扩展，请在 `buildozer.spec` 中 pin 版本。 
+
+## React Native 示例（mobile/）
+
+`mobile/App.js` 展示如何通过后端接口生成图片。若需纯离线（无后端），可将 `text_fit_draw.py` 与 `image_fit_paste.py` 逻辑迁移到 JS（Canvas 或 Skia），目前未内置。
+
+## 括号着色规则
+
+在文本中：
+- `[]` 或 `【】` 以及其中内容全部使用紫色（可在 `draw_text_auto` 中调整）。
+- 支持跨行延续：若一行开启括号但未关闭，下一行继续使用着色。
+
+## 扩展与后续规划
+
+- Accessibility / 自动发送（安卓）：当前示例未集成，可后续通过 `pyjnius` + 自定义 Service 实现。
+- 纯前端实现：以 RN Skia 或 Web Canvas 重写绘制算法，免除 Python 运行时。 
+- GitHub Actions 远程自动打包：可新增工作流使用 Docker 化 Buildozer 镜像输出 APK Artifact。
+
+## 版权与素材声明
+
+请确保底图与字体素材在你的分发范围内具备合法授权。本仓库不对第三方字体与图片的版权负责。
+
+## 许可证
+
+（可根据需要补充：MIT / Apache-2.0 / 仅自用 等）
+
+欢迎提交 Issue 与 PR 改进跨平台兼容与移动端体验。
