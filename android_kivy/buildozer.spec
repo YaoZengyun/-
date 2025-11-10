@@ -5,7 +5,7 @@ package.domain = org.example
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,ttf,kv,md,xml,atlas
 version = 1.0.0
-requirements = python3,kivy,pillow,plyer,pyjnius,android
+requirements = python3==3.11.6,kivy,pillow,plyer,pyjnius,android
 orientation = portrait
 
 # 包含资源
@@ -14,6 +14,7 @@ include_patterns = BaseImages/*, font.ttf
 # 最低与目标 API（按需调整）
 android.api = 33
 android.minapi = 24
+android.ndk_api = 24
 android.archs = arm64-v8a
 
 # 权限可按需添加
